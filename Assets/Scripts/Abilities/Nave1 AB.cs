@@ -3,29 +3,33 @@ using System.Collections;
 
 public class Nave1AB : MonoBehaviour
 {
+ 
     public ShipData shipData;
     public Animator animator;
+    
+    public float abilitySpeedMultiplier = 2f;
+    public float abilityFireRateMultiplier = 0.5f;
 
-    // Valores originales
-    private float originalSpeed;
-    private float originalFireRate;
+    
+    private bool isAbilityRunning = false;
+    private bool estaEnCooldown = false;
 
-    // Buff
-    public float abilitySpeedMultiplier = 2f;   
-    public float abilityFireRateMultiplier = 0.5f; 
-    public float abilityDuration = 10f;          
+    public float CurrentSpeed { get; private set; }
+    public float CurrentFireRate { get; private set; }
 
     void Start()
     {
-       
-        originalSpeed = shipData.speed;
-        originalFireRate = shipData.fireRate;
+        // Inicializamos con los valores base del ShipData
+        CurrentSpeed = shipData.speed;
+        CurrentFireRate = shipData.fireRate;
+
+        if (shipData == null) Debug.LogError("Asigna el ShipData en el Inspector de " + gameObject.name);
     }
 
     void Update()
     {
-        
-        if (Input.GetKeyDown(KeyCode.O))
+        // Activación con 'O' usando tiempos universales de ShipData
+        if (Input.GetKeyDown(KeyCode.O) && !isAbilityRunning && !estaEnCooldown)
         {
             StartCoroutine(ActivateAbility());
         }
@@ -33,16 +37,37 @@ public class Nave1AB : MonoBehaviour
 
     private IEnumerator ActivateAbility()
     {
-        animator.SetBool("IsAbilityActive", true); 
+        isAbilityRunning = true;
+        Debug.Log("Habilidad Potenciadora Activada");
 
-        shipData.speed *= abilitySpeedMultiplier;
-        shipData.fireRate *= abilityFireRateMultiplier;
+        animator.SetBool("IsAbilityActive", true);
 
-        yield return new WaitForSeconds(abilityDuration);
+        // Aplicamos el Buff a nuestras variables locales, NO al ShipData
+        CurrentSpeed = shipData.speed * abilitySpeedMultiplier;
+        CurrentFireRate = shipData.fireRate * abilityFireRateMultiplier;
 
-        shipData.speed = originalSpeed;
-        shipData.fireRate = originalFireRate;
+        // Esperamos la duración universal definida en ShipData
+        yield return new WaitForSeconds(shipData.abilityDuration);
 
-        animator.SetBool("IsAbilityActive", false); 
+        // Reset de valores al estado original
+        CurrentSpeed = shipData.speed;
+        CurrentFireRate = shipData.fireRate;
+
+        animator.SetBool("IsAbilityActive", false);
+        isAbilityRunning = false;
+
+        // Iniciamos el enfriamiento universal
+        StartCoroutine(IniciarCooldown());
+    }
+
+    private IEnumerator IniciarCooldown()
+    {
+        estaEnCooldown = true;
+        Debug.Log("Habilidad Nave1 en cooldown...");
+
+        yield return new WaitForSeconds(shipData.abilityCooldown);
+
+        estaEnCooldown = false;
+        Debug.Log("Habilidad Nave1 lista");
     }
 }

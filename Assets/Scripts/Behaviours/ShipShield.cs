@@ -6,48 +6,62 @@ public class ShipShield : MonoBehaviour
     public GameObject shieldVisual;
     public ShipData shipData;
 
+    [Header("Settings")]
     public float shieldHP;
     public float regenDelay = 5f;
     public float regenRate = 10f;
-    public bool isActive = true;
-    private Coroutine regenRoutine;
+    public float hideDelay = 3f;
+    public float fadeDuration = 0.5f;
+
+    public bool isActive = true; // Indica si el escudo está "arriba" y puede absorber daño
+
     private SpriteRenderer shieldRenderer;
+    private Color originalColor;
+    private Coroutine regenRoutine;
+    private Coroutine visibilityRoutine;
 
     private void Start()
     {
         shieldHP = shipData.maxShield;
         shieldRenderer = shieldVisual.GetComponent<SpriteRenderer>();
+        originalColor = shieldRenderer.color;
 
-
+        // Empezar con el alpha correcto
         shieldRenderer.enabled = false;
     }
 
     public void TakeDamage(float damage)
     {
-        // Solo recibe daño si está activo
+        // Si el escudo está roto (isActive = false), el daño pasa directo a la nave
         if (!isActive) return;
 
         shieldHP -= damage;
         shieldHP = Mathf.Max(shieldHP, 0);
 
+        // Mostrar el escudo al impactar
+        StopVisibility();
         shieldRenderer.enabled = true;
+        shieldRenderer.color = originalColor;
 
-        // Si se rompe se desactiva
         if (shieldHP <= 0)
         {
-            isActive = false;
-            shieldRenderer.enabled = false;
+            isActive = false; // ESCUDO ROTO
+            visibilityRoutine = StartCoroutine(FadeShield(Color.red));
+        }
+        else
+        {
+            // Timer para ocultar si no se rompió
+            visibilityRoutine = StartCoroutine(WaitAndFade());
         }
 
-        if (regenRoutine != null)
-            StopCoroutine(regenRoutine);
-
-        regenRoutine = StartCoroutine(RegenerateShield());
+        // REGENERACIÓN
+        if (regenRoutine != null) StopCoroutine(regenRoutine);
+        regenRoutine = StartCoroutine(RegenerateShieldLogic());
     }
 
-    //Regeneracion
-    private IEnumerator RegenerateShield()
+    private IEnumerator RegenerateShieldLogic()
     {
+        // Esperar el tiempo de calma
         yield return new WaitForSeconds(regenDelay);
 
         while (shieldHP < shipData.maxShield)
@@ -55,15 +69,41 @@ public class ShipShield : MonoBehaviour
             shieldHP += regenRate * Time.deltaTime;
             shieldHP = Mathf.Min(shieldHP, shipData.maxShield);
 
-            yield return null;
-        }
+           
+            if (shieldHP > 0 && !isActive)
+            {
+                isActive = true;
+            }
 
-        // vuelve a activarse al llegar a 100 de vida
-        if (shieldHP >= shipData.maxShield)
-        {
-            isActive = true;
-            shieldRenderer.enabled = false; // oculto hasta recibir daño
+            yield return null;
         }
     }
 
+    //Desaparicion de Escudo
+    private IEnumerator WaitAndFade()
+    {
+        yield return new WaitForSeconds(hideDelay);
+        yield return StartCoroutine(FadeShield(originalColor));
+    }
+
+    private IEnumerator FadeShield(Color baseColor)
+    {
+        float elapsedTime = 0f;
+        shieldRenderer.color = baseColor;
+
+        while (elapsedTime < fadeDuration)
+        {
+            elapsedTime += Time.deltaTime;
+            float alpha = Mathf.Lerp(originalColor.a, 0f, elapsedTime / fadeDuration);
+            shieldRenderer.color = new Color(baseColor.r, baseColor.g, baseColor.b, alpha);
+            yield return null;
+        }
+
+        shieldRenderer.enabled = false;
+    }
+
+    private void StopVisibility()
+    {
+        if (visibilityRoutine != null) StopCoroutine(visibilityRoutine);
+    }
 }

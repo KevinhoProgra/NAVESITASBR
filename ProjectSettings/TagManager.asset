@@ -15,14 +15,14 @@ TagManager:
   - UI
   - PlayerShield
   - Player
+  - 
+  - 
+  - 
+  - BULLET
+  - 
+  - 
+  - 
   - ENEMY
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
-  - 
   - 
   - 
   - 
@@ -46,8 +46,17 @@ TagManager:
   - name: Default
     uniqueID: 0
     locked: 0
+  - name: SPRITES
+    uniqueID: 1018950053
+    locked: 0
   - name: Player
     uniqueID: 2949800793
+    locked: 0
+  - name: CANNON
+    uniqueID: 3128452495
+    locked: 0
+  - name: BULLET
+    uniqueID: 2416245627
     locked: 0
   m_RenderingLayers:
   - Default

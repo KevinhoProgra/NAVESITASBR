@@ -1,21 +1,40 @@
 ﻿using System.Collections;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class Player : MonoBehaviour
 {
     public Rigidbody2D rb;
     public ShipData shipData;
-    public Animator animator;   
+    public Animator animator;
 
-    private float horizontal;
-    private float vertical;
+    // Controles generados por Unity
+    private Controls inputActions;
 
-
+    // Valores guardados de los ejes analógicos
+    private Vector2 moveInput;
+    private float rotationInput;
 
     // Dash
     private bool canDash = true;
-   private bool isDashing;
+    private bool isDashing;
 
+    private void Awake()
+    {
+        inputActions = new Controls();
+    }
+
+    private void OnEnable()
+    {
+        inputActions.Enable();
+        inputActions.Player.Dash.started += Context => IntentarDash();
+    }
+
+    private void OnDisable()
+    {
+        inputActions.Disable();
+        inputActions.Player.Dash.started -= Context => IntentarDash();
+    }
 
     private void Start()
     {
@@ -23,68 +42,85 @@ public class Player : MonoBehaviour
         rb.linearDamping = 2f;
         rb.angularDamping = 5f;
     }
+
     void Update()
     {
-        rb.angularVelocity = 0f;
+        
+        moveInput = inputActions.Player.Move.ReadValue<Vector2>();
+        rotationInput = inputActions.Player.Rotate.ReadValue<float>();
 
-        horizontal = Input.GetAxisRaw("Horizontal");
-        vertical = Input.GetAxisRaw("Vertical");
-
-        if (vertical != 0)
-            horizontal = 0;
-
-        if (Input.GetKeyDown(KeyCode.LeftShift) && canDash)
+        if (moveInput.y != 0)
         {
-            StartCoroutine(Dash());
+            moveInput.x = 0; // Bloqueo de strafe lateral si vas adelante/atrás
         }
     }
 
     void FixedUpdate()
     {
-        if (isDashing) return;
+        if (isDashing)
+        {
+            
+            rb.MoveRotation(rb.rotation + rotationInput * shipData.rotationSpeed * Time.fixedDeltaTime);
+            return;
+        }
 
-        Vector2 forwardMovement = transform.up * vertical * shipData.speed;
-        Vector2 strafeMovement = transform.right * horizontal * shipData.speed;
+        // --- MOVIMIENTO LINEAL ---
+        float vSpeed = (moveInput.y < 0) ? shipData.speed * shipData.backwardMultiplier : shipData.speed;
+        float hSpeed = shipData.speed * shipData.strafeMultiplier;
+        Vector2 forwardMovement = transform.up * moveInput.y * vSpeed;
+        Vector2 strafeMovement = transform.right * moveInput.x * hSpeed;
 
         rb.AddForce((forwardMovement + strafeMovement), ForceMode2D.Force);
 
-        // Freno suave
-        if (horizontal == 0 && vertical == 0)
+        // Frenado inercial
+        if (moveInput.x == 0 && moveInput.y == 0)
         {
-            rb.linearVelocity = Vector2.Lerp(rb.linearVelocity, Vector2.zero, 5f * Time.fixedDeltaTime);
+            if (rb.linearVelocity.magnitude <= shipData.speed)
+            {
+                rb.linearVelocity = Vector2.Lerp(rb.linearVelocity, Vector2.zero, 5f * Time.fixedDeltaTime);
+            }
         }
 
-        // Limitar velocidad
-        rb.linearVelocity = Vector2.ClampMagnitude(rb.linearVelocity, shipData.speed);
+        if (rb.linearVelocity.magnitude <= shipData.speed)
+        {
+            rb.linearVelocity = Vector2.ClampMagnitude(rb.linearVelocity, shipData.speed);
+        }
 
-        // Rotación
-        float rotationInput = 0f;
-        if (Input.GetKey(KeyCode.Y)) rotationInput = 1f;
-        if (Input.GetKey(KeyCode.U)) rotationInput = -1f;
+     
+        rb.angularVelocity = rotationInput * shipData.rotationSpeed;
 
-        rb.MoveRotation(rb.rotation + rotationInput * shipData.rotationSpeed * Time.fixedDeltaTime);
 
-        // Animación
-        bool isMovingForward = vertical > 0 && rb.linearVelocity.magnitude > 0.1f;
+        bool isMovingForward = moveInput.y > 0 && rb.linearVelocity.magnitude > 0.1f;
         animator.SetBool(AnimatorParams.IsMoving, isMovingForward);
     }
-    private IEnumerator Dash()
+
+    private void IntentarDash()
+    {
+        if (canDash && !isDashing)
+        {
+            StartCoroutine(EjecutarDashImpulse());
+        }
+    }
+
+    private IEnumerator EjecutarDashImpulse()
     {
         canDash = false;
         isDashing = true;
 
-        
-        float originalDrag = rb.linearDamping;
-        rb.linearDamping = 0f;
+        // 1. Limpiamos velocidad vieja para que el impulso salga limpio en cualquier dirección
+        rb.linearVelocity = Vector2.zero;
 
-        rb.linearVelocity = transform.up * shipData.dashPower;
+        // 2. Un único golpe seco de energía física (Impulse)
+        rb.AddForce(transform.up * shipData.dashPower, ForceMode2D.Impulse);
 
-       
-        yield return new WaitForSeconds(shipData.dashTime);        
-        rb.linearDamping = originalDrag;
+        // 3. Duración del impulso (Ajusta esto en el ShipData, ej: 0.1s es ideal)
+        yield return new WaitForSeconds(shipData.dashTime);
+
+        // 4. Apagamos el estado de dash. El FixedUpdate retoma el control, 
+        // pero gracias al nuevo filtro de velocidad, la nave se deslizará con inercia.
         isDashing = false;
 
-        // Cooldown
+        // 5. Cooldown antes de poder usarlo otra vez
         yield return new WaitForSeconds(shipData.dashCooldown);
         canDash = true;
     }
